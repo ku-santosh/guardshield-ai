@@ -1,0 +1,69 @@
+version: '3.8'
+
+networks:
+  guardshield-tier:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:
+
+services:
+  # --- Core Relational Storage Node ---
+  postgres-db:
+    image: postgres:15-alpine
+    container_name: guardshield-postgres
+    environment:
+      POSTGRES_DB: guardshield_prod
+      POSTGRES_USER: enterprise_admin
+      POSTGRES_PASSWORD: SecretVaultPassword2026
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../database/schema.sql:/docker-entrypoint-initdb.d/1-schema.sql
+      - ../database/seed.sql:/docker-entrypoint-initdb.d/2-seed.sql
+    networks:
+      - guardshield-tier
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U enterprise_admin -d guardshield_prod"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # --- Caching & Short-Term Memory Store ---
+  redis-cache:
+    image: redis:7-alpine
+    container_name: guardshield-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - guardshield-tier
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  # --- GuardShield AI Application API Gateway ---
+  backend-api:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: guardshield-backend
+    ports:
+      - "8000:8000"
+    environment:
+      - USE_DATABASE=true
+      - DATABASE_URL=postgresql+asyncpg://enterprise_admin:SecretVaultPassword2026@postgres-db:5432/guardshield_prod
+      - REDIS_URL=redis://redis-cache:6379/0
+      - OPENAI_API_KEY=sk-placeholder-real-key-required-for-agents
+    depends_on:
+      postgres-db:
+        condition: service_healthy
+      redis-cache:
+        condition: service_healthy
+    networks:
+      - guardshield-tier

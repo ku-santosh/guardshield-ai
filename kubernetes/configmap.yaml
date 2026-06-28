@@ -1,0 +1,9 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: guardshield-runtime-config
+  namespace: enterprise-demo
+data:
+  USE_DATABASE: "true"
+  REDIS_URL: "redis://redis-service:6379/0"
+  ENV: "production"

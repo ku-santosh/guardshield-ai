@@ -1,0 +1,46 @@
+name: GuardShield Enterprise Integration Pipeline
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  quality-assurance:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Source Workspace Code
+      uses: actions/checkout@v4
+
+    - name: Configure Python Environment Node
+      uses: actions/setup-python@v5
+      with:
+        python-python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install Active Project Requirements
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r backend/requirements.txt
+        pip install pytest httpx
+
+    - name: Run Unit Tests and Generate Coverage Metrics
+      run: |
+        cd backend
+        python -m pytest ../tests/ --copy-network-block-actions
+
+  container-orchestration:
+    needs: quality-assurance
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout Workspace Code
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: actions/component-buildx@v3
+
+    - name: Local Build Verification Engine Compile
+      run: |
+        docker build -t guardshield-backend:latest ./backend/
